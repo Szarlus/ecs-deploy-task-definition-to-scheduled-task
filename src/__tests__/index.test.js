@@ -182,7 +182,7 @@ describe('Deploy to ECS', () => {
     );
   });
 
-  test('updates the appropriate targets', async () => {});
+  test('updates the appropriate targets', async () => { });
 
   test('cleans null keys out of the task definition contents', async () => {
     fs.readFileSync.mockImplementation((pathInput, encoding) => {
@@ -349,6 +349,74 @@ describe('Deploy to ECS', () => {
     expect(callValue.Targets[0].Id).toEqual('Foo');
   });
 
+  it('paginates listRules requests', async () => {
+    core.getInput = jest.fn().mockReturnValueOnce('task-definition.json'); // task-definition
+
+    mockCweListRules
+      .mockImplementationOnce(() => {
+        return {
+          promise() {
+            return Promise.resolve({
+              NextToken: 'next-token',
+              Rules: [
+                {
+                  Name: 'Sync-Task',
+                  Arn: 'arn:aws:events:us-east-1:00000000001:rule/Sync-Task',
+                  State: 'ENABLED',
+                  Description: 'Foooo.',
+                  ScheduleExpression: 'rate(15 minutes)',
+                  EventBusName: 'default',
+                },
+                {
+                  Name: 'Prefixed-Task',
+                  Arn:
+                    'arn:aws:events:us-east-1:00000000001:rule/Prefixed-Task',
+                  State: 'ENABLED',
+                  Description: 'Barrr.',
+                  ScheduleExpression: 'rate(20 minutes)',
+                  EventBusName: 'default',
+                },
+              ],
+            });
+          },
+        };
+      })
+      .mockImplementationOnce(() => {
+        return {
+          promise() {
+            return Promise.resolve({
+              Rules: [
+                {
+                  Name: 'Sync-Task',
+                  Arn: 'arn:aws:events:us-east-1:00000000001:rule/Sync-Task',
+                  State: 'ENABLED',
+                  Description: 'Bazzz.',
+                  ScheduleExpression: 'rate(15 minutes)',
+                  EventBusName: 'default',
+                },
+                {
+                  Name: 'Prefixed-Task',
+                  Arn:
+                    'arn:aws:events:us-east-1:00000000001:rule/Prefixed-Task',
+                  State: 'ENABLED',
+                  Description: 'FoooBaaar.',
+                  ScheduleExpression: 'rate(20 minutes)',
+                  EventBusName: 'default',
+                },
+              ],
+            });
+          },
+        };
+      });
+
+    await run();
+
+    expect(core.setFailed).toHaveBeenCalledTimes(0);
+
+    expect(mockCweListRules).toHaveBeenCalledTimes(2);
+    expect(mockCweListTargetsByRule).toHaveBeenCalledTimes(4);
+    expect(mockCwePutTargets).toHaveBeenCalledTimes(0);
+  });
   test('error is caught if task def registration fails', async () => {
     mockEcsRegisterTaskDef.mockImplementation(() => {
       throw new Error('Could not parse');

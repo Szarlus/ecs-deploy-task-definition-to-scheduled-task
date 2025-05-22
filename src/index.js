@@ -186,9 +186,20 @@ async function run() {
     const taskDefArn = registerResponse.taskDefinition.taskDefinitionArn;
     core.setOutput('task-definition-arn', taskDefArn);
 
-    // TODO: Batch this?
-    const data = await cwe.listRules().promise();
-    const rules = (data && data.Rules) || [];
+    let nextToken = undefined;
+    let rules = [];
+    do {
+      const data = await cwe
+        .listRules({
+          ...(nextToken ? { NextToken: nextToken } : {}),
+        })
+        .promise();
+
+      if (data && data.Rules) {
+        rules.push(...data.Rules);
+      }
+      nextToken = data.NextToken;
+    } while (nextToken);
     await Promise.all(
       rules
         .filter((rule) => {
